@@ -1,0 +1,31 @@
+# Local development only — Railway uses the Dockerfile directly.
+# All secrets are passed as env vars (JIRA_JSON, GH_TOKEN, etc.) — no host mounts.
+# For local dev: `export JIRA_JSON=... GH_TOKEN=... && docker compose up --build`
+
+services:
+  app:
+    build: .
+    container_name: reviz
+    environment:
+      - RUN_MODE=${RUN_MODE:-webhook}
+      - PORT=${PORT:-8080}
+      - TRIGGER_SECRET=${TRIGGER_SECRET:-}
+      - JIRA_JSON=${JIRA_JSON}
+      - GH_TOKEN=${GH_TOKEN}
+      - POLL_INTERVAL=${POLL_INTERVAL:-3600}
+      - TESTS_REPO_OWNER=${TESTS_REPO_OWNER:-[GITHUB_ORG_OR_USER]}
+      - TESTS_REPO_NAME=${TESTS_REPO_NAME:-revyoos-tests}
+      - OPENCODE_MODEL_ANALYZE=${OPENCODE_MODEL_ANALYZE:-opencode-go/deepseek-v4-flash}
+      - OPENCODE_MODEL_WRITE=${OPENCODE_MODEL_WRITE:-opencode-go/qwen3.6-plus}
+      - OPENCODE_MODEL_REVIEW=${OPENCODE_MODEL_REVIEW:-opencode-go/deepseek-v4-flash}
+      - GIT_USER_EMAIL=${GIT_USER_EMAIL:-reviz-bot@users.noreply.github.com}
+      - GIT_USER_NAME=${GIT_USER_NAME:-Reviz Bot}
+    ports:
+      - "8080:8080"   # local dev only; Railway maps $PORT automatically
+    stdin_open: true
+    tty: true
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 3G
