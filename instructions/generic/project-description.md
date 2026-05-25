@@ -17,6 +17,8 @@ The system has two main layers:
 - Booking.com
 - VRBO
 - Expedia
+- Google
+- TripAdvisor 
 
 ## PMS Integrations
 
@@ -24,15 +26,20 @@ The system has two main layers:
 - Guesty
 - Hostfully
 
+## PMS without integrations
+- Avantio
+- Bookster
+- Hostify
+- Kross Booking
+- Lodgify
+- Smoobu
+
 ## Environments And URLs
 
 Main demo/staging portal:
+Demo environment (Stripe sandbox) — for e2e tests + regression: `https://www.demo.revyoos.com` 
 
-- `https://[REVYOOS_DEMO_URL]` ← fill in actual demo URL
-
-Production (use only for subscription/Stripe-related tests):
-
-- `https://www.revyoos.com`
+Production environment (Stripe live mode) — for smoke tests only: `https://www.revyoos.com`
 
 Important testing limitation:
 
