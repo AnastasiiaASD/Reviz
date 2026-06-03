@@ -38,3 +38,7 @@ jira-ai add-label-to-issue {{task-key}} analyzed
 ```bash
 jira-ai issue assign {{task-key}} "712020:f5e4ea9b-86f3-42d8-9a02-b35dfd8f01bc"
 ```
+### 6. Wait for QA confirmation
+After assigning the task, stop. Do NOT proceed to test scenarios.
+**Wait for Anastasiia Shoshu to confirm the analysis is correct 
+before the task moves forward.**
