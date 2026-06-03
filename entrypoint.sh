@@ -27,7 +27,6 @@ if [ -n "$GH_TOKEN" ]; then
 else
   echo "WARN: GH_TOKEN not set — knowledge-base unavailable" >&2
 fi
-
 # --- Opencode permissions --------------------------------------------------
 cat <<EOF > /app/opencode.json
 {
