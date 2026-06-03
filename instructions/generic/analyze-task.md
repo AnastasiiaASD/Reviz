@@ -3,6 +3,7 @@
 ## Objective
 Conduct a deep dive into the task requirements by analyzing Jira discussions and the application's current state. Identify missing information and prepare clarifying questions to ensure high-quality test coverage.
 Read @/instructions/generic/project-description.md before start
+Knowledge base with full feature documentation is at /app/knowledge-base/ — read the relevant feature file before analyzing the task.
 
 ## ⛔ Token budget
 

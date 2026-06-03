@@ -15,6 +15,7 @@ fi
 # --- Git identity (needed for commits made by Reviz) ---------------------
 git config --global user.email "${GIT_USER_EMAIL:-reviz-bot@users.noreply.github.com}"
 git config --global user.name "${GIT_USER_NAME:-Reviz Bot}"
+
 # --- Clone knowledge base ------------------------------------------
 echo "Cloning revyoos-knowledge-base..."
 if [ -n "$GH_TOKEN" ]; then
