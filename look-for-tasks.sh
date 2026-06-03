@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Script to get all tasks assigned to the current user from jira-ai
+# Script to get all tasks assigned to the current user from Jira-ai
 # If a task is found, run opencode with the appropriate instruction file.
 
 # Tests repo configuration (override via env)
 TESTS_REPO_OWNER="${TESTS_REPO_OWNER:-[GITHUB_ORG_OR_USER]}"
-TESTS_REPO_NAME="${TESTS_REPO_NAME:-revyoos-tests}"
+TESTS_REPO_NAME="${TESTS_REPO_NAME:-revyoos-qa-automation}"
 
 if [ -z "$GH_TOKEN" ]; then
     echo "ERROR: GH_TOKEN env var is not set — cannot clone or push to ${TESTS_REPO_OWNER}/${TESTS_REPO_NAME}" >&2
