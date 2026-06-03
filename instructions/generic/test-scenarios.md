@@ -3,6 +3,7 @@
 ## Goal
 Analyze the task requirements, define comprehensive test scenarios (happy path and negative), manually validate them in the browser, and document technical details for future automation.
 Read @/instructions/generic/project-description.md before start.
+Knowledge base with full feature documentation is at /app/knowledge-base/ — read the relevant feature file before analyzing the task.
 
 ## ⛔ Token budget
 

@@ -2,6 +2,7 @@
 
 Follow this process for each test scenario in your task to ensure consistency, reliability, and proper documentation.
 Read @/instructions/generic/project-description.md before start.
+Knowledge base with full feature documentation is at /app/knowledge-base/ — read the relevant feature file before analyzing the task.
 
 ## ⛔ Token budget — read first
 
