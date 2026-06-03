@@ -15,7 +15,17 @@ fi
 # --- Git identity (needed for commits made by Reviz) ---------------------
 git config --global user.email "${GIT_USER_EMAIL:-reviz-bot@users.noreply.github.com}"
 git config --global user.name "${GIT_USER_NAME:-Reviz Bot}"
-
+# --- Clone knowledge base ------------------------------------------
+echo "Cloning revyoos-knowledge-base..."
+if [ -n "$GH_TOKEN" ]; then
+  git clone --quiet \
+    "https://x-access-token:${GH_TOKEN}@github.com/AnastasiiaASD/revyoos-knowledge-base.git" \
+    /app/knowledge-base 2>/dev/null \
+    && echo "Knowledge base ready: $(ls /app/knowledge-base/*.md | wc -l) files" \
+    || echo "WARN: knowledge-base clone failed" >&2
+else
+  echo "WARN: GH_TOKEN not set — knowledge-base unavailable" >&2
+fi
 # --- Opencode permissions --------------------------------------------------
 cat <<EOF > /app/opencode.json
 {
