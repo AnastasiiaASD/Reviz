@@ -48,3 +48,6 @@ jira-ai add-label-to-issue {{task-key}} qaed
 ```bash
 jira-ai issue assign {{task-key}} "712020:f5e4ea9b-86f3-42d8-9a02-b35dfd8f01bc"
 ```
+### 6. Wait for QA confirmation
+After posting scenarios to Jira — stop. Do NOT proceed to writing tests.
+**Wait for Anastasiia Shoshu to approve the scenarios before automation begins.**
