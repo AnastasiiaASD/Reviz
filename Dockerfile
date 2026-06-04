@@ -31,8 +31,7 @@ RUN echo '{"permission": {"*": {"*": "allow"}}}' > opencode.json
 RUN mkdir -p .playwright && echo '{"browser": {"browserName": "chromium", "launchOptions": {"args": ["--no-sandbox"]}}}' > .playwright/cli.config.json
 
 # Copy instructions folder
-COPY instructions/ /app/instructions/
-
+COPY instructions ./instructions
 # Copy and set entrypoint script
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
