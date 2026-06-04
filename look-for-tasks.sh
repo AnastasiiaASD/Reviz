@@ -36,7 +36,7 @@ prefetch_task_details() {
 }
 
 echo "Checking for assigned tasks (First pass: Analysis)..."
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Ready For Test' AND (labels IS EMPTY OR (labels != analyzed AND labels != qaed))" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Ready For Test' AND labels = 'reviz-qa'" --limit 1)
 
 # Extract Task ID (Key) from the output table
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
@@ -48,7 +48,7 @@ if [ -n "$TASK_ID" ]; then
     rm -f "/app/tmp/${TASK_ID}_details.txt"
 else
     echo "No analysis tasks found. Checking for test scenario tasks..."
-    OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Ready For Test' AND (labels IS EMPTY OR (labels = analyzed AND labels != qaed))" --limit 1)
+    OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels = 'reviz-qa' AND labels = analyzed AND labels != qaed" --limit 1)
     TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
     if [ -n "$TASK_ID" ]; then
@@ -58,7 +58,7 @@ else
         rm -f "/app/tmp/${TASK_ID}_details.txt"
     else
         echo "No scenario tasks found. Checking for write test tasks..."
-        OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Ready For Test' AND (labels IS EMPTY OR (labels = analyzed AND labels = qaed AND labels != pr_created))" --limit 1)
+        OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels = 'reviz-qa' AND labels = qaed AND labels != pr_created" --limit 1)
         TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
         if [ -n "$TASK_ID" ]; then
