@@ -34,6 +34,11 @@ Opencode-go runs on a 5-hour rolling quota window. This step is meant to be chea
 jira-ai add-label-to-issue {{task-key}} analyzed
 ```
 
+### 4.5. Move task to "In Testing"
+```bash
+jira-ai transition-issue {{task-key}} "In Testing"
+```
+
 ### 5. Assign task to QA Anastasiia Shoshu
 ```bash
 jira-ai issue assign {{task-key}} "712020:f5e4ea9b-86f3-42d8-9a02-b35dfd8f01bc"
