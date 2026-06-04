@@ -5,7 +5,7 @@ set -e
 if [ -n "$JIRA_JSON" ]; then
     echo "Configuring Jira AI..."
     echo "$JIRA_JSON" | jq -r 'to_entries | .[] | "\(.key)=\(.value)"' > .env
-    jira-ai auth --from-file .env
+    jira-ai auth --from-file .env || echo "WARN: Jira auth failed — will retry on task run" >&2
     rm .env
     echo "Jira AI configured successfully."
 else
