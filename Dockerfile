@@ -40,6 +40,9 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 COPY look-for-tasks.sh /app/
 RUN chmod +x /app/look-for-tasks.sh
 
+# Copy Confluence API module
+COPY confluence-api.js /app/
+
 ENTRYPOINT ["entrypoint.sh"]
 # No CMD — entrypoint.sh starts the webhook/loop when no args are passed.
 # For local dev override: docker run -it reviz-revyoos bash
