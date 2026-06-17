@@ -12,6 +12,10 @@ else
     echo "WARNING: JIRA_JSON env var is not set — Jira polling will fail." >&2
 fi
 
+if [ -z "$CONFLUENCE_SPACE_KEY" ]; then
+    echo "WARNING: CONFLUENCE_SPACE_KEY not set — Confluence pages will not be created." >&2
+fi
+
 # --- Git identity (needed for commits made by Reviz) ---------------------
 git config --global user.email "${GIT_USER_EMAIL:-reviz-bot@users.noreply.github.com}"
 git config --global user.name "${GIT_USER_NAME:-Reviz Bot}"
