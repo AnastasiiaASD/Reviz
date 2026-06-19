@@ -1,0 +1,60 @@
+name: Reviz PR Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/REV-**/**'
+
+jobs:
+  run-reviz-tests:
+    name: Run tests — ${{ github.head_ref }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('**/package-lock.json') }}-chromium
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Detect changed test folder
+        id: changed
+        run: |
+          FOLDER=$(git diff --name-only origin/main...HEAD \
+            | grep '^tests/REV-' \
+            | awk -F'/' '{print $1"/"$2}' \
+            | sort -u | head -1)
+          echo "folder=$FOLDER" >> $GITHUB_OUTPUT
+          echo "Detected folder: $FOLDER"
+
+      - name: Run tests
+        if: steps.changed.outputs.folder != ''
+        run: npx playwright test ${{ steps.changed.outputs.folder }}/
+        env:
+          BASE_URL: ${{ secrets.DEMO_BASE_URL }}
+          API_BASE_URL: ${{ secrets.DEMO_API_BASE_URL }}
+          TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
+          TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ steps.changed.outputs.folder }}
+          path: playwright-report/
+          retention-days: 7
