@@ -259,9 +259,25 @@ For completeness, these are Reviz improvements that should NOT be reverted:
 
 ---
 
-## Next Steps
+## 7. Decision Record (2026-06-20)
 
-1. **Nastya reviews this report** — especially Section 5 (auto-merge decision)
-2. **Confirm which items from Section 4 to implement**
-3. Agent proceeds with implementation of confirmed items only
-4. All changes will go in the `claude/analyze-ainela-reviz-lc5pq2` branch on `AnastasiiaASD/Reviz`
+**Status: IMPLEMENTED** — Per Dana's direction (planning meeting 2026-06-19)
+and Nastya's confirmation, the following decisions were made:
+
+| # | Item | Decision | Commit |
+|---|------|----------|--------|
+| 1 | Auto-merge on passing tests | **ADOPTED** — PR auto-merged, branch deleted | `feat: auto-merge on pass, label-strip retry on fail` |
+| 2 | Label-strip retry on failure | **ADOPTED** — all labels stripped, ticket re-enters from Phase 1 | (same commit) |
+| 3 | Manual PR-review checkpoint | **REMOVED** — only 2 human checkpoints remain (Phase 1, Phase 2) | (same commit) |
+| 4 | Maintenance mode | **PORTED** with Reviz adaptations (Confluence, knowledge base) | `feat: maintenance mode, test-skip-on-failure, test account guard` |
+| 5 | Test-skip-on-failure | **PORTED** — `test.skip` replaces deletion | (same commit) |
+| 6 | Test account guard | **PORTED** — pre-flight precondition checks | (same commit) |
+
+**Open question (for Nastya):** Label naming — currently keeping Reviz's
+existing `pr_created` label (just changing the behavior to auto-merge).
+Should we rename to `covered` to match ainela for cross-repo consistency?
+Default: keep `pr_created`.
+
+**Files not found in repo:**
+- `reviz-project-plan.md` — does not exist; changelog added to `README.md` instead
+- `RevizDocumentationEN.pdf` — no source found in repo; needs manual update by Nastya
