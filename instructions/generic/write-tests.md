@@ -63,6 +63,29 @@ npx playwright test tests/{{task-key}}/
 - `TEST_USER_EMAIL` / `TEST_USER_PASSWORD` — тестові credentials
 ```
 
+### Обробка невдалих тестів
+- Якщо тест не проходить, спробувати виправити **один раз**
+- Якщо виправлення не допомогло — **НЕ видаляти тест**. Замість цього позначити `test.skip`:
+  ```typescript
+  test.skip('TC-001: Should do something — blocker: [причина]',
+    async ({ page }) => {
+      // ... збережений код тесту для дебагу ...
+    });
+  ```
+- Якщо причина — баг у додатку: `test.skip('blocker: app issue — [опис]')`
+
+### Test account guard
+Якщо сценарій вимагає конкретного стану акаунта (підписка, план), додати guard:
+
+```ts
+test.beforeEach(async ({ authenticatedPage }) => {
+  const { apiHelper } = authenticatedPage;
+  const account = await apiHelper.getCurrentAccount();
+  test.skip(!account.isActive, 'requires active account — current status: ' + account.status);
+  test.skip(account.plan !== 'pro', 'requires Pro plan — current plan: ' + account.plan);
+});
+```
+
 ### 5. Закомітити
 ```bash
 cd /app/repo
