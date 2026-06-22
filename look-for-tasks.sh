@@ -223,7 +223,7 @@ fi
 
 # ── Phase 4: retest ──────────────────────────────────────────────────────────
 echo "=== Phase 4: retest ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels NOT IN (retested)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels = pr_created AND labels NOT IN (retested)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
