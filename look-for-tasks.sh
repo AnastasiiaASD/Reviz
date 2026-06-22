@@ -29,7 +29,7 @@ transition_status() {
     local task_id="$1"
     local target_status="$2"
     echo "Transitioning $task_id → $target_status..."
-    if jira-ai set-status "$task_id" "$target_status" 2>/dev/null; then
+    if jira-ai transition-issue "$task_id" "$target_status" 2>/dev/null; then
         echo "Status changed: $task_id → $target_status"
         return 0
     else
@@ -57,8 +57,8 @@ TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}
 if [ -n "$TASK_ID" ]; then
     echo "→ $TASK_ID (model: $OPENCODE_MODEL_ANALYZE)"
 
-    # Move ticket to IN TESTING (Jira transition name: "check pass")
-    transition_status "$TASK_ID" "check pass" || exit 1
+    # Move ticket to IN TESTING before starting work
+    transition_status "$TASK_ID" "In Testing" || exit 1
 
     prefetch_task_details "$TASK_ID"
     opencode run "Please run @/instructions/analyze-task.md for $TASK_ID. Details at /app/tmp/${TASK_ID}_details.txt" \
@@ -236,10 +236,9 @@ if [ -n "$TASK_ID" ]; then
     rm -f "/app/tmp/${TASK_ID}_details.txt"
 
     # Move to PRODUCTION after successful retest
-    # TODO: replace "PRODUCTION" with the actual Jira transition name (run: jira-ai get-transitions <ticket-in-IN-TESTING>)
     if [ "$RETEST_EXIT" -eq 0 ]; then
-        echo "Retest succeeded — moving $TASK_ID to PRODUCTION"
-        transition_status "$TASK_ID" "PRODUCTION" || echo "WARN: ticket stays in IN TESTING — check transition name" >&2
+        echo "Retest succeeded — moving $TASK_ID to Production"
+        transition_status "$TASK_ID" "Production" || echo "WARN: ticket stays in IN TESTING — check transition name" >&2
     else
         echo "WARN: retest exited with code $RETEST_EXIT — leaving $TASK_ID in IN TESTING" >&2
     fi
