@@ -25,7 +25,7 @@ prefetch_task_details() {
 
 # ── Phase 1: analyze ────────────────────────────────────────────────────────
 echo "=== Phase 1: analyze ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels NOT IN (analyzed)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'READY FOR TEST' AND labels NOT IN (analyzed)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
@@ -39,7 +39,7 @@ fi
 
 # ── Phase 2: test-scenarios ──────────────────────────────────────────────────
 echo "=== Phase 2: test-scenarios ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels = analyzed AND labels NOT IN (scenarios-done)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'READY FOR TEST' AND labels = analyzed AND labels NOT IN (scenarios-done)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
@@ -53,7 +53,7 @@ fi
 
 # ── Phase 3: write-tests ─────────────────────────────────────────────────────
 echo "=== Phase 3: write-tests ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels = scenarios-done AND labels NOT IN (pr_created)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'READY FOR TEST' AND labels = scenarios-done AND labels NOT IN (pr_created)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
