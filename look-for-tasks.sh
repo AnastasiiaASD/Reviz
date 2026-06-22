@@ -23,13 +23,43 @@ prefetch_task_details() {
     fi
 }
 
+# Transition ticket status with error handling.
+# On failure: sets reviz-blocked label + posts Jira comment, then returns 1.
+transition_status() {
+    local task_id="$1"
+    local target_status="$2"
+    echo "Transitioning $task_id → $target_status..."
+    if jira-ai set-status "$task_id" "$target_status" 2>/dev/null; then
+        echo "Status changed: $task_id → $target_status"
+        return 0
+    else
+        echo "ERROR: failed to transition $task_id to '$target_status'" >&2
+        jira-ai add-label-to-issue "$task_id" reviz-blocked
+        mkdir -p /app/tmp
+        cat > "/app/tmp/${task_id}_status_error.md" <<EOF
+⚠️ Reviz blocked: failed to move ticket to **${target_status}**.
+Possible causes: invalid transition, permissions, or Jira connectivity.
+Please move the ticket manually and remove the \`reviz-blocked\` label to retry.
+
+— 🤖 Reviz AI Agent
+EOF
+        jira-ai add-comment --file-path "/app/tmp/${task_id}_status_error.md" --issue-key "$task_id"
+        rm -f "/app/tmp/${task_id}_status_error.md"
+        return 1
+    fi
+}
+
 # ── Phase 1: analyze ────────────────────────────────────────────────────────
 echo "=== Phase 1: analyze ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels NOT IN (analyzed)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Ready For Test' AND labels = reviz-qa AND labels NOT IN (analyzed)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
     echo "→ $TASK_ID (model: $OPENCODE_MODEL_ANALYZE)"
+
+    # Move ticket to IN TESTING before starting work
+    transition_status "$TASK_ID" "In Testing" || exit 1
+
     prefetch_task_details "$TASK_ID"
     opencode run "Please run @/instructions/analyze-task.md for $TASK_ID. Details at /app/tmp/${TASK_ID}_details.txt" \
         --model "$OPENCODE_MODEL_ANALYZE"
@@ -39,7 +69,7 @@ fi
 
 # ── Phase 2: test-scenarios ──────────────────────────────────────────────────
 echo "=== Phase 2: test-scenarios ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels = analyzed AND labels NOT IN (scenarios-done)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels = analyzed AND labels NOT IN (scenarios-done)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
@@ -53,7 +83,7 @@ fi
 
 # ── Phase 3: write-tests ─────────────────────────────────────────────────────
 echo "=== Phase 3: write-tests ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels = scenarios-done AND labels NOT IN (pr_created)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels = scenarios-done AND labels NOT IN (pr_created)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
@@ -61,38 +91,114 @@ if [ -n "$TASK_ID" ]; then
     prefetch_task_details "$TASK_ID"
 
     BRANCH="tests/${TASK_ID}"
+    LOGFILE="/app/tmp/${TASK_ID}_phase3.log"
+    mkdir -p /app/tmp
+    : > "$LOGFILE"
+    log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOGFILE"; }
+
+    log "Phase 3 started for $TASK_ID"
 
     # Клонуємо репо
     rm -rf /app/repo
-    git clone "$TESTS_REPO_URL" /app/repo
+    log "Cloning $TESTS_REPO_OWNER/$TESTS_REPO_NAME..."
+    if ! git clone "$TESTS_REPO_URL" /app/repo 2>>"$LOGFILE"; then
+        log "ERROR: git clone failed — marking reviz-blocked"
+        jira-ai add-label-to-issue "$TASK_ID" reviz-blocked
+        cat > "/app/tmp/${TASK_ID}_pr_comment.md" <<EOF
+⚠️ Reviz Phase 3 blocked: git clone failed for $TESTS_REPO_OWNER/$TESTS_REPO_NAME.
+Please check GH_TOKEN permissions and repo availability.
+
+— 🤖 Reviz AI Agent
+EOF
+        jira-ai add-comment --file-path "/app/tmp/${TASK_ID}_pr_comment.md" --issue-key "$TASK_ID"
+        rm -f "/app/tmp/${TASK_ID}_pr_comment.md" "/app/tmp/${TASK_ID}_details.txt"
+        exit 1
+    fi
     cd /app/repo && npm install && cd -
     ln -sfn /app/instructions /app/repo/instructions
+    log "Repo cloned and dependencies installed"
 
     # Запускаємо write-tests
+    log "Running opencode write-tests..."
     (cd /app && opencode run "Please run @/instructions/write-tests.md for $TASK_ID. Details at /app/tmp/${TASK_ID}_details.txt" \
         --model "$OPENCODE_MODEL_WRITE")
+    log "opencode write-tests finished"
 
     # Push + PR
     pushd /app/repo > /dev/null
     git remote set-url origin "$TESTS_REPO_URL" 2>/dev/null || git remote add origin "$TESTS_REPO_URL"
 
-    if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
-        git push -u origin "$BRANCH"
+    if ! git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
+        log "ERROR: branch ${BRANCH} not created by opencode — marking reviz-blocked"
+        jira-ai add-label-to-issue "$TASK_ID" reviz-blocked
+        cat > "/app/tmp/${TASK_ID}_pr_comment.md" <<EOF
+⚠️ Reviz Phase 3 blocked: opencode did not create branch \`${BRANCH}\`.
+Check write-tests logs for errors.
 
-        PR_RESPONSE=$(curl -sS \
-            -X POST \
-            -H "Authorization: token ${GH_TOKEN}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${TESTS_REPO_OWNER}/${TESTS_REPO_NAME}/pulls" \
-            -d "{\"title\":\"${TASK_ID}: автотести\",\"head\":\"${BRANCH}\",\"base\":\"main\",\"body\":\"Auto-generated by Reviz for ${TASK_ID}\"}")
+— 🤖 Reviz AI Agent
+EOF
+        jira-ai add-comment --file-path "/app/tmp/${TASK_ID}_pr_comment.md" --issue-key "$TASK_ID"
+        rm -f "/app/tmp/${TASK_ID}_pr_comment.md"
+        popd > /dev/null
+        rm -f "/app/tmp/${TASK_ID}_details.txt"
+        rm -rf /app/repo
+        exit 1
+    fi
 
-        PR_URL=$(echo "$PR_RESPONSE" | grep -o '"html_url":"[^"]*pulls/[0-9]*"' | head -1 | cut -d'"' -f4)
+    # Step 1: Push branch
+    log "Pushing branch $BRANCH..."
+    if ! git push -u origin "$BRANCH" 2>>"$LOGFILE"; then
+        log "ERROR: git push failed — marking reviz-blocked"
+        jira-ai add-label-to-issue "$TASK_ID" reviz-blocked
+        cat > "/app/tmp/${TASK_ID}_pr_comment.md" <<EOF
+⚠️ Reviz Phase 3 blocked: git push failed for branch \`${BRANCH}\`.
+Possible causes: network error, branch conflict, or permission issue.
+Branch is available locally for manual push.
 
-        if [ -n "$PR_URL" ]; then
-            echo "PR created: $PR_URL"
+— 🤖 Reviz AI Agent
+EOF
+        jira-ai add-comment --file-path "/app/tmp/${TASK_ID}_pr_comment.md" --issue-key "$TASK_ID"
+        rm -f "/app/tmp/${TASK_ID}_pr_comment.md"
+        popd > /dev/null
+        rm -f "/app/tmp/${TASK_ID}_details.txt"
+        rm -rf /app/repo
+        exit 1
+    fi
+    log "Push successful"
 
-            # Коментар у Jira з посиланням на PR
-            cat > "/app/tmp/${TASK_ID}_pr_comment.md" <<EOF
+    # Step 2: Create PR
+    log "Creating PR for $BRANCH..."
+    PR_RESPONSE=$(curl -sS \
+        -X POST \
+        -H "Authorization: token ${GH_TOKEN}" \
+        -H "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/${TESTS_REPO_OWNER}/${TESTS_REPO_NAME}/pulls" \
+        -d "{\"title\":\"${TASK_ID}: автотести\",\"head\":\"${BRANCH}\",\"base\":\"main\",\"body\":\"Auto-generated by Reviz for ${TASK_ID}\"}")
+
+    PR_URL=$(echo "$PR_RESPONSE" | grep -o '"html_url":"[^"]*pulls/[0-9]*"' | head -1 | cut -d'"' -f4)
+
+    if [ -z "$PR_URL" ]; then
+        log "ERROR: PR creation failed — response: $PR_RESPONSE"
+        log "Branch $BRANCH pushed but PR not created — marking reviz-blocked"
+        jira-ai add-label-to-issue "$TASK_ID" reviz-blocked
+        cat > "/app/tmp/${TASK_ID}_pr_comment.md" <<EOF
+⚠️ Reviz Phase 3 partial: branch \`${BRANCH}\` pushed but PR creation failed.
+Please create PR manually from branch \`${BRANCH}\` → \`main\`.
+
+— 🤖 Reviz AI Agent
+EOF
+        jira-ai add-comment --file-path "/app/tmp/${TASK_ID}_pr_comment.md" --issue-key "$TASK_ID"
+        rm -f "/app/tmp/${TASK_ID}_pr_comment.md"
+        popd > /dev/null
+        rm -f "/app/tmp/${TASK_ID}_details.txt"
+        rm -rf /app/repo
+        exit 1
+    fi
+    log "PR created: $PR_URL"
+
+    # Step 3: Post Jira comment with PR link
+    log "Posting Jira comment with PR link..."
+    cat > "/app/tmp/${TASK_ID}_pr_comment.md" <<EOF
 🤖 Reviz написав автотести та створив PR: ${PR_URL}
 Гілка: \`${BRANCH}\`
 Папка тестів: \`tests/${TASK_ID}/\`
@@ -100,19 +206,16 @@ GitHub Actions запустить тести автоматично після �
 
 — 🤖 Reviz AI Agent
 EOF
-            jira-ai add-comment --file-path "/app/tmp/${TASK_ID}_pr_comment.md" --issue-key "$TASK_ID"
-            rm -f "/app/tmp/${TASK_ID}_pr_comment.md"
-        else
-            echo "WARN: PR URL not parsed. Response: $PR_RESPONSE" >&2
-        fi
+    jira-ai add-comment --file-path "/app/tmp/${TASK_ID}_pr_comment.md" --issue-key "$TASK_ID"
+    rm -f "/app/tmp/${TASK_ID}_pr_comment.md"
+    log "Jira comment posted"
 
-        # Лейбла тільки після успішного пушу + PR
-        jira-ai add-label-to-issue "$TASK_ID" pr_created
-    else
-        echo "ERROR: branch ${BRANCH} not created by opencode — skipping push/PR" >&2
-    fi
+    # Step 4: Set pr_created label (only after successful push + PR)
+    log "Setting pr_created label..."
+    jira-ai add-label-to-issue "$TASK_ID" pr_created
+    log "Phase 3 completed successfully for $TASK_ID"
+
     popd > /dev/null
-
     rm -f "/app/tmp/${TASK_ID}_details.txt"
     rm -rf /app/repo
     exit 0
@@ -120,7 +223,7 @@ fi
 
 # ── Phase 4: retest ──────────────────────────────────────────────────────────
 echo "=== Phase 4: retest ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Ready for Retest' AND labels NOT IN (retested)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels NOT IN (retested)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
@@ -128,7 +231,17 @@ if [ -n "$TASK_ID" ]; then
     prefetch_task_details "$TASK_ID"
     opencode run "Please run @/instructions/retest.md for $TASK_ID. Details at /app/tmp/${TASK_ID}_details.txt" \
         --model "$OPENCODE_MODEL_ANALYZE"
+
+    RETEST_EXIT=$?
     rm -f "/app/tmp/${TASK_ID}_details.txt"
+
+    # Move to PRODUCTION after successful retest
+    if [ "$RETEST_EXIT" -eq 0 ]; then
+        echo "Retest succeeded — moving $TASK_ID to Production"
+        transition_status "$TASK_ID" "Production" || echo "WARN: ticket stays in In Testing" >&2
+    else
+        echo "WARN: retest exited with code $RETEST_EXIT — leaving $TASK_ID in In Testing" >&2
+    fi
     exit 0
 fi
 
