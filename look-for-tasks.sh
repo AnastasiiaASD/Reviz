@@ -23,13 +23,43 @@ prefetch_task_details() {
     fi
 }
 
+# Transition ticket status with error handling.
+# On failure: sets reviz-blocked label + posts Jira comment, then returns 1.
+transition_status() {
+    local task_id="$1"
+    local target_status="$2"
+    echo "Transitioning $task_id → $target_status..."
+    if jira-ai set-status "$task_id" "$target_status" 2>/dev/null; then
+        echo "Status changed: $task_id → $target_status"
+        return 0
+    else
+        echo "ERROR: failed to transition $task_id to '$target_status'" >&2
+        jira-ai add-label-to-issue "$task_id" reviz-blocked
+        mkdir -p /app/tmp
+        cat > "/app/tmp/${task_id}_status_error.md" <<EOF
+⚠️ Reviz blocked: failed to move ticket to **${target_status}**.
+Possible causes: invalid transition, permissions, or Jira connectivity.
+Please move the ticket manually and remove the \`reviz-blocked\` label to retry.
+
+— 🤖 Reviz AI Agent
+EOF
+        jira-ai add-comment --file-path "/app/tmp/${task_id}_status_error.md" --issue-key "$task_id"
+        rm -f "/app/tmp/${task_id}_status_error.md"
+        return 1
+    fi
+}
+
 # ── Phase 1: analyze ────────────────────────────────────────────────────────
 echo "=== Phase 1: analyze ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels NOT IN (analyzed)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Ready For Test' AND labels = reviz-qa AND labels NOT IN (analyzed)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
     echo "→ $TASK_ID (model: $OPENCODE_MODEL_ANALYZE)"
+
+    # Move ticket to IN TESTING before starting work
+    transition_status "$TASK_ID" "In Testing" || exit 1
+
     prefetch_task_details "$TASK_ID"
     opencode run "Please run @/instructions/analyze-task.md for $TASK_ID. Details at /app/tmp/${TASK_ID}_details.txt" \
         --model "$OPENCODE_MODEL_ANALYZE"
@@ -39,7 +69,7 @@ fi
 
 # ── Phase 2: test-scenarios ──────────────────────────────────────────────────
 echo "=== Phase 2: test-scenarios ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels = analyzed AND labels NOT IN (scenarios-done)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels = analyzed AND labels NOT IN (scenarios-done)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
@@ -53,7 +83,7 @@ fi
 
 # ── Phase 3: write-tests ─────────────────────────────────────────────────────
 echo "=== Phase 3: write-tests ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Prep Autotests' AND labels = scenarios-done AND labels NOT IN (pr_created)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels = scenarios-done AND labels NOT IN (pr_created)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
@@ -193,7 +223,7 @@ fi
 
 # ── Phase 4: retest ──────────────────────────────────────────────────────────
 echo "=== Phase 4: retest ==="
-OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'Ready for Retest' AND labels NOT IN (retested)" --limit 1)
+OUTPUT=$(jira-ai run-jql "assignee = currentUser() AND status = 'In Testing' AND labels NOT IN (retested)" --limit 1)
 TASK_ID=$(echo "$OUTPUT" | grep "│" | grep -v "Key" | awk -F '│' '{print $2}' | tr -d '[:space:]')
 
 if [ -n "$TASK_ID" ]; then
@@ -201,7 +231,17 @@ if [ -n "$TASK_ID" ]; then
     prefetch_task_details "$TASK_ID"
     opencode run "Please run @/instructions/retest.md for $TASK_ID. Details at /app/tmp/${TASK_ID}_details.txt" \
         --model "$OPENCODE_MODEL_ANALYZE"
+
+    RETEST_EXIT=$?
     rm -f "/app/tmp/${TASK_ID}_details.txt"
+
+    # Move to PRODUCTION after successful retest
+    if [ "$RETEST_EXIT" -eq 0 ]; then
+        echo "Retest succeeded — moving $TASK_ID to Production"
+        transition_status "$TASK_ID" "Production" || echo "WARN: ticket stays in In Testing" >&2
+    else
+        echo "WARN: retest exited with code $RETEST_EXIT — leaving $TASK_ID in In Testing" >&2
+    fi
     exit 0
 fi
 
