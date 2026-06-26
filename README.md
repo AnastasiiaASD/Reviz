@@ -6,19 +6,25 @@ Reviz is an autonomous AI QA agent that automatically analyzes Jira tickets, pre
 
 ## How It Works
 
-Reviz polls Jira for tickets with status `Prep Autotests` and processes them in three sequential phases, controlled by Jira labels:
+Reviz polls Jira for tickets and processes them in four phases, controlled by Jira labels:
 
 ```
-Jira ticket (status: "Prep Autotests")
+Jira ticket (status: "Ready For Test", label: "reviz-qa")
         ↓
-  no labels → [Phase 1] analyze-task      → label: "analyzed"
-  "analyzed" → [Phase 2] test-scenarios   → label: "qaed"
-  "analyzed" + "qaed" → [Phase 3] write-tests → label: "pr_created"
+  Phase 1: analyze-task       → label: "analyzed"
+  ⏸ QA answers clarifying questions
         ↓
-  GitHub PR created → result posted to Jira
+  Phase 2: test-scenarios     → label: "qaed"
+  ⏸ QA selects scenarios to implement
+        ↓
+  Phase 3: write-tests        → label: "pr_created"
+  Phase 4: review-pr (auto)   → merge or retry
+        ↓
+  Tests pass → PR auto-merged, branch deleted
+  Tests fail → labels stripped, ticket re-enters queue from Phase 1
 ```
 
-Each phase posts a comment to the Jira ticket and assigns it back to the QA engineer.
+**Two human checkpoints** (after Phase 1 and Phase 2). Phase 3/4 runs autonomously — if all tests pass, the PR is auto-merged and the branch is deleted. If tests fail, failing tests are marked with `test.skip`, labels are stripped, and the ticket is transitioned back to "Ready For Test" for automatic reprocessing.
 
 ---
 
@@ -56,7 +62,10 @@ reviz/
 │       ├── analyze-task.md             # Phase 1: task analysis instructions
 │       ├── test-scenarios.md           # Phase 2: scenario preparation instructions
 │       ├── write-tests.md              # Phase 3: test writing instructions
+│       ├── review-pr.md               # Phase 4: auto-review, merge/retry
+│       ├── maintenance.md             # Periodic test suite health check
 │       └── how-to-use-playwright-cli.md # Browser automation rules & token budget
+├── confluence-api.js                   # Confluence page upsert API
 ├── Dockerfile
 ├── docker-compose.yml                  # Local dev only
 ├── entrypoint.sh                       # Startup + auth + run mode selector
@@ -164,6 +173,31 @@ Reviz runs on a **5-hour rolling quota window**. To maximize throughput:
 - No test retries beyond one attempt
 
 See `instructions/generic/how-to-use-playwright-cli.md` for full rules.
+
+---
+
+## Changelog
+
+### 2026-06-20 — Align with ainela workflow (auto-merge, retry mechanism)
+
+**Architecture change:** Removed the manual PR-review checkpoint after Phase 3.
+Reviz now auto-merges passing test PRs and deletes the branch (matching Dana's
+ainela workflow). On test failure, all phase labels are stripped and the ticket
+transitions back to "Ready For Test" for automatic reprocessing from Phase 1.
+
+This reduces the workflow to **two human checkpoints** (after Phase 1 and
+Phase 2), down from three. The change was requested by Dana (planning meeting
+2026-06-19) and confirmed by Nastya.
+
+Also added:
+- **Maintenance mode** (`instructions/generic/maintenance.md`) — periodic test
+  suite health check, ported from ainela
+- **Test-skip-on-failure** — failing tests are marked with `test.skip` instead
+  of being deleted, preserving implementation for debugging
+- **Test account guard** — pre-flight checks that test account meets scenario
+  preconditions (plan tier, account status)
+
+Reference: `ainela-vs-reviz-analysis.md` in this repo for the full comparison.
 
 ---
 
