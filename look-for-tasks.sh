@@ -29,24 +29,37 @@ transition_status() {
     local task_id="$1"
     local target_status="$2"
     echo "Transitioning $task_id → $target_status..."
-    if jira-ai transition-issue "$task_id" "$target_status" 2>/dev/null; then
-        echo "Status changed: $task_id → $target_status"
-        return 0
-    else
-        echo "ERROR: failed to transition $task_id to '$target_status'" >&2
-        jira-ai add-label-to-issue "$task_id" reviz-blocked
-        mkdir -p /app/tmp
-        cat > "/app/tmp/${task_id}_status_error.md" <<EOF
+
+    # Debug: show available transitions from the current status
+    echo "=== DEBUG: available transitions for $task_id ==="
+    jira-ai transitions "$task_id" 2>&1 || true
+    echo "=== END transitions ==="
+
+    # Try target_status as-is first, then common transition name variants
+    local tried=""
+    for name in "$target_status" "Move to ${target_status}" "Start Testing" "Begin Testing" "To ${target_status}"; do
+        tried="${tried:+$tried, }\"$name\""
+        echo "Trying transition: '$name'..."
+        if jira-ai transition-issue "$task_id" "$name" 2>&1; then
+            echo "Status changed: $task_id → $target_status (via transition '$name')"
+            return 0
+        fi
+    done
+
+    echo "ERROR: failed to transition $task_id to '$target_status' (tried: $tried)" >&2
+    jira-ai add-label-to-issue "$task_id" reviz-blocked
+    mkdir -p /app/tmp
+    cat > "/app/tmp/${task_id}_status_error.md" <<EOF
 ⚠️ Reviz blocked: failed to move ticket to **${target_status}**.
-Possible causes: invalid transition, permissions, or Jira connectivity.
-Please move the ticket manually and remove the \`reviz-blocked\` label to retry.
+Tried transitions: ${tried}.
+Please check available transitions with \`jira-ai transitions ${task_id}\` and move the ticket manually.
+Remove the \`reviz-blocked\` label to retry.
 
 — 🤖 Reviz AI Agent
 EOF
-        jira-ai add-comment --file-path "/app/tmp/${task_id}_status_error.md" --issue-key "$task_id"
-        rm -f "/app/tmp/${task_id}_status_error.md"
-        return 1
-    fi
+    jira-ai add-comment --file-path "/app/tmp/${task_id}_status_error.md" --issue-key "$task_id"
+    rm -f "/app/tmp/${task_id}_status_error.md"
+    return 1
 }
 
 # ── Phase 1: analyze ────────────────────────────────────────────────────────
