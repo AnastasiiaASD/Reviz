@@ -24,24 +24,17 @@ prefetch_task_details() {
 }
 
 # Transition ticket status with error handling.
+# Uses transition-helper.mjs to bypass jira-ai CLI's "multiple transitions" bug.
 # On failure: sets reviz-blocked label + posts Jira comment, then returns 1.
 transition_status() {
     local task_id="$1"
     local target_status="$2"
     echo "Transitioning $task_id → $target_status..."
 
-    # Debug: show jira-ai transition help and current ticket status
-    echo "=== DEBUG: jira-ai transition help ==="
-    jira-ai transition --help 2>&1 || true
-    echo "=== END help ==="
-
-    echo "Attempting: jira-ai transition $task_id $target_status"
     local output
-    output=$(jira-ai transition "$task_id" "$target_status" 2>&1)
+    output=$(node /app/transition-helper.mjs "$task_id" "$target_status" 2>&1)
     local rc=$?
-    echo "=== transition output ==="
     echo "$output"
-    echo "=== exit code: $rc ==="
 
     if [ "$rc" -eq 0 ]; then
         echo "Status changed: $task_id → $target_status"
@@ -53,9 +46,7 @@ transition_status() {
     mkdir -p /app/tmp
     cat > "/app/tmp/${task_id}_status_error.md" <<EOF
 ⚠️ Reviz blocked: failed to move ticket to **${target_status}**.
-Tried transitions: ${tried}.
-Please check available transitions with \`jira-ai transitions ${task_id}\` and move the ticket manually.
-Remove the \`reviz-blocked\` label to retry.
+Please move the ticket manually and remove the \`reviz-blocked\` label to retry.
 
 — 🤖 Reviz AI Agent
 EOF

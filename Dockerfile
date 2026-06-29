@@ -40,8 +40,9 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 COPY look-for-tasks.sh /app/
 RUN chmod +x /app/look-for-tasks.sh
 
-# Copy Confluence API module
+# Copy Confluence API module and transition helper
 COPY confluence-api.js /app/
+COPY transition-helper.mjs /app/
 
 ENTRYPOINT ["entrypoint.sh"]
 # No CMD — entrypoint.sh starts the webhook/loop when no args are passed.
