@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Bypass jira-ai CLI's "Multiple transitions found" limitation.
 // Usage: node transition-helper.mjs <task-id> <to-status>
-import { getIssueTransitions, transitionIssue, validateIssuePermissions } from 'jira-ai/dist/lib/jira-client.js';
+const GLOBAL_MODULES = '/usr/local/lib/node_modules';
+const { getIssueTransitions, transitionIssue, validateIssuePermissions } =
+  await import(`file://${GLOBAL_MODULES}/jira-ai/dist/lib/jira-client.js`);
 
 const [taskId, toStatus] = process.argv.slice(2);
 if (!taskId || !toStatus) {
