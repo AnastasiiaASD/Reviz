@@ -30,23 +30,25 @@ transition_status() {
     local target_status="$2"
     echo "Transitioning $task_id → $target_status..."
 
-    # Debug: show available transitions from the current status
-    echo "=== DEBUG: available transitions for $task_id ==="
-    jira-ai transition "$task_id" --list 2>&1 || true
-    echo "=== END transitions ==="
+    # Debug: show jira-ai transition help and current ticket status
+    echo "=== DEBUG: jira-ai transition help ==="
+    jira-ai transition --help 2>&1 || true
+    echo "=== END help ==="
 
-    # Try target_status as-is first, then common transition name variants
-    local tried=""
-    for name in "$target_status" "Move to ${target_status}" "Start Testing" "Begin Testing" "To ${target_status}"; do
-        tried="${tried:+$tried, }\"$name\""
-        echo "Trying transition: '$name'..."
-        if jira-ai transition "$task_id" "$name" 2>&1; then
-            echo "Status changed: $task_id → $target_status (via transition '$name')"
-            return 0
-        fi
-    done
+    echo "Attempting: jira-ai transition $task_id $target_status"
+    local output
+    output=$(jira-ai transition "$task_id" "$target_status" 2>&1)
+    local rc=$?
+    echo "=== transition output ==="
+    echo "$output"
+    echo "=== exit code: $rc ==="
 
-    echo "ERROR: failed to transition $task_id to '$target_status' (tried: $tried)" >&2
+    if [ "$rc" -eq 0 ]; then
+        echo "Status changed: $task_id → $target_status"
+        return 0
+    fi
+
+    echo "ERROR: failed to transition $task_id to '$target_status' (exit code: $rc)" >&2
     jira-ai add-label-to-issue "$task_id" reviz-blocked
     mkdir -p /app/tmp
     cat > "/app/tmp/${task_id}_status_error.md" <<EOF
