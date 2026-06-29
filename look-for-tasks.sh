@@ -32,7 +32,7 @@ transition_status() {
 
     # Debug: show available transitions from the current status
     echo "=== DEBUG: available transitions for $task_id ==="
-    jira-ai transitions "$task_id" 2>&1 || true
+    jira-ai transition "$task_id" --list 2>&1 || true
     echo "=== END transitions ==="
 
     # Try target_status as-is first, then common transition name variants
@@ -40,7 +40,7 @@ transition_status() {
     for name in "$target_status" "Move to ${target_status}" "Start Testing" "Begin Testing" "To ${target_status}"; do
         tried="${tried:+$tried, }\"$name\""
         echo "Trying transition: '$name'..."
-        if jira-ai transition-issue "$task_id" "$name" 2>&1; then
+        if jira-ai transition "$task_id" "$name" 2>&1; then
             echo "Status changed: $task_id → $target_status (via transition '$name')"
             return 0
         fi

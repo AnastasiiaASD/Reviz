@@ -114,4 +114,4 @@ rm -f /app/tmp/{{task-key}}_test_output.txt
 ```
 
 The orchestrator handles the transition to Production after this step exits successfully.
-Do NOT call `jira-ai transition-issue` — the orchestrator does it.
+Do NOT call `jira-ai transition` — the orchestrator does it.
