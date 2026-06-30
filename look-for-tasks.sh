@@ -10,7 +10,7 @@ fi
 TESTS_REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${TESTS_REPO_OWNER}/${TESTS_REPO_NAME}.git"
 
 : "${OPENCODE_MODEL_ANALYZE:=opencode-go/deepseek-v4-flash}"
-: "${OPENCODE_MODEL_WRITE:=opencode-go/qwen3.6-plus}"
+: "${OPENCODE_MODEL_WRITE:=opencode-go/deepseek-v4-pro}"
 
 prefetch_task_details() {
     local task_id="$1"
@@ -128,7 +128,11 @@ EOF
     log "Running opencode write-tests..."
     (cd /app && opencode run "Please run @/instructions/write-tests.md for $TASK_ID. Details at /app/tmp/${TASK_ID}_details.txt" \
         --model "$OPENCODE_MODEL_WRITE")
-    log "opencode write-tests finished"
+    OPENCODE_EXIT=$?
+    log "opencode write-tests finished (exit code: $OPENCODE_EXIT)"
+    if [ "$OPENCODE_EXIT" -ne 0 ]; then
+        log "ERROR: opencode exited with code $OPENCODE_EXIT — model may be disabled or quota exceeded"
+    fi
 
     # Push + PR
     pushd /app/repo > /dev/null

@@ -56,7 +56,7 @@ EOF
 # If a slug errors with "unknown model", check `opencode models` and update
 # env vars in Railway — no rebuild needed.
 export OPENCODE_MODEL_ANALYZE="${OPENCODE_MODEL_ANALYZE:-opencode-go/deepseek-v4-flash}"
-export OPENCODE_MODEL_WRITE="${OPENCODE_MODEL_WRITE:-opencode-go/qwen3.6-plus}"
+export OPENCODE_MODEL_WRITE="${OPENCODE_MODEL_WRITE:-opencode-go/deepseek-v4-pro}"
 export OPENCODE_MODEL_REVIEW="${OPENCODE_MODEL_REVIEW:-opencode-go/deepseek-v4-flash}"
 # Legacy single-model fallback
 export OPENCODE_MODEL="${OPENCODE_MODEL:-$OPENCODE_MODEL_WRITE}"
